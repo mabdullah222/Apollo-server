@@ -1,0 +1,15 @@
+langgraph
+langchain
+langchain-core
+langchain-openai
+langchain-groq
+python-pptx
+requests
+pydantic
+wikipedia
+langchain-community
+chromadb
+python-dotenv
+sentence-transformers
+streamlit
+streamlit-carousel
