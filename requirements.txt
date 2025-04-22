@@ -13,3 +13,5 @@ python-dotenv
 sentence-transformers
 streamlit
 streamlit-carousel
+faiss-cpu
+playwright
