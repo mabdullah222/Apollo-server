@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-py"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  clerkuserId String    @unique
+  name        String
+  email       String    @unique
+  lectures    Lecture[]
+}
+
+model Lecture {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  topic       String
+  toc         String[]
+  slides      Json[]
+  lecture     String[]
+  resources   String[]
+  vector_db   String
+  video_paths String[]
+  completed   Boolean  @default(false)
+  created_at  DateTime @default(now())
+  progress    Int      @default(0)
+  user        User     @relation(fields: [userId], references: [clerkuserId])
+  userId      String
+}

@@ -6,13 +6,13 @@ if __name__ == "__main__":
     output = app.invoke({
         "topic": "",
         "toc": [],
-        "resources": {},
-        "documents": {},
-        "vector_db": {},
+        "resources": [],
+        "documents": [],
+        "vector_db": "",
         "content": {},
         "slides": [],
         "lecture": [],
+        "video_paths":[]
     })
     with open(f'outputs/{output['topic']}.json','w') as ofile:
-        del output['vector_db']
         json.dump(output,ofile)

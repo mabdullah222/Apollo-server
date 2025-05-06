@@ -3,3 +3,7 @@
 output.json
 
 .env
+
+__pycache__
+
+chromadb_store

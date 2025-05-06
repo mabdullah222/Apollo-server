@@ -14,6 +14,8 @@ from tools.SearchTools import WebSearchTool
 from langchain.prompts import ChatPromptTemplate
 import asyncio
 from utils.scarper import scrape_multiple
+from uuid import uuid4
+from utils.heygen import generate_heygen_video
 
 load_dotenv()
 
@@ -22,36 +24,24 @@ class PresentationState(TypedDict):
     toc: List[str]
     resources: List[str]
     documents: str
-    vector_db: Chroma
+    vector_db: str
     content: Dict[str, str]
     slides: List[Dict[str, str]]
     lecture: List[str]
+    video_paths: List[str]
 
 class WebSearchArgs(BaseModel):
     query: str = Field(description="The search query to find relevant information from the web.")
 
 class Nodes:
     def __init__(self):
-        self.llm2 = ChatGroq(api_key=os.environ['GROQ_API_KEY_1'], model='llama-3.3-70b-versatile')
-        self.llm = ChatGroq(api_key=os.environ['GROQ_API_KEY_2'], model='llama-3.3-70b-versatile')
+        self.llm = ChatGroq(api_key=os.environ['GROQ_API_KEY_1'], model='llama-3.3-70b-versatile')
+        self.llm2 = ChatGroq(api_key=os.environ['GROQ_API_KEY_3'], model='llama-3.3-70b-versatile')
 
         self.web_search_tool = WebSearchTool()
         self.embeddings = OllamaEmbeddings(model="nomic-embed-text")
         self.retrieval_qa_chat_prompt = hub.pull("langchain-ai/retrieval-qa-chat")
 
-    def Topic(self, state: PresentationState) -> PresentationState:
-        topic = input("Enter the topic you want to study: ")
-        state.update({
-            "topic": topic,
-            "toc": [],
-            "resources": [],
-            "documents": [],
-            "vector_db": {},
-            "content": {},
-            "slides": [],
-            "lecture": [],
-        })
-        return state
 
     def SubjectSpecialist(self, state: PresentationState) -> PresentationState:
         topic = state["topic"]
@@ -76,7 +66,7 @@ class Nodes:
                 tools=tools,
                 llm=self.llm,
                 agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-                verbose=True,
+                verbose=False,
                 handle_parsing_errors=True
             )
 
@@ -112,7 +102,9 @@ class Nodes:
     def StoreInVectorDB(self, state: PresentationState) -> PresentationState:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=50)
         splitted_docs = text_splitter.create_documents([state["documents"]])
-        state["vector_db"] = Chroma.from_documents(splitted_docs, self.embeddings)
+        collection_name = str(uuid4())
+        Chroma.from_documents(persist_directory='chromadb_store',collection_name=collection_name,documents=splitted_docs, embedding=self.embeddings)
+        state['vector_db'] = collection_name
         return state
 
 
@@ -122,11 +114,12 @@ class Nodes:
             print("Vector database is empty. Skipping research.")
             return state
 
-        retriever = state["vector_db"].as_retriever()
+        vector_Store= Chroma(persist_directory="chromadb_store",collection_name=state['vector_db'],embedding_function=self.embeddings)
+        retriever=vector_Store.as_retriever(search_type="mmr",search_kwargs={'k': 3, 'lambda_mult': 0.25})
 
         def retrieve_info(query: str):
             """Retrieves relevant passages from the vector database."""
-            docs = retriever.get_relevant_documents(query)
+            docs = retriever.invoke(query)
             return "\n\n".join([doc.page_content for doc in docs])
 
         state["content"] = {}
@@ -135,16 +128,16 @@ class Nodes:
             print(f"Researching: {subtopic}")
 
             retrieval_tool = Tool(
-                name=f"Retrieve_{subtopic}",
+                name=f"Retrieve",
                 func=retrieve_info,
-                description=f"Search the vector database for {subtopic} to find relevant information."
+                description=f"Search the vector database  to find relevant information."
             )
 
             react_agent = initialize_agent(
                 tools=[retrieval_tool],
                 llm=self.llm,
                 agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-                verbose=True,
+                verbose=False,
                 handle_parsing_errors=True
             )
 
@@ -180,9 +173,9 @@ class Nodes:
                     1. Include coding examples with explanations if required. Retain all important details.
                     2. Use JSON format: `title`, `content`, and `code` (use `""` if not applicable).
                     3. Include only relevant information. For example, if the topic is an introduction, do not add conclusions.
-                    4. Return a list of JSON objects without additional text.
-                    5- Most important the content of the slides should be long atleast 8 lines.
-                    6- Don't repeat the same title for different slides. If the title is already present in the list below.{slides_title}
+                    Return ONLY a valid JSON array of objects as plain text.Dont add any language indicator like json or any other extra information.
+                    5- Most importantly the content of the slides should be long atleast 8 lines.
+                    6- Don't repeat the same slides if the same title or any other slide with similar meaning title is already present in the list below: {slides_title}
 
                     **Topic and Information:**
                     Topic: {topic}
@@ -191,10 +184,10 @@ class Nodes:
                     **Example Output:**
                     [
                         {{
-                            "title": "Contains the title of the slide",
-                            "content": "Contains the text content of the slide",
-                            "code": "Contains any code if programming related thing, mathematical work if related to math, etc."
-                        }},
+                            "title": "Example of Integrating Factors",
+                            "content": "Consider the differential equation dy/dx + 2y = 3. We can use Integrating Factors to solve this equation.",
+                            "code": "dy/dx + 2y = 3 => \u03bc(x) = e^\u222b2dx = e^2x => d(e^2x*y)/dx = 3e^2x => e^2x*y = (3/2)e^2x + C"
+                        }}
                     ]
                 '''
                 prompt = ChatPromptTemplate.from_template(template)
@@ -202,7 +195,7 @@ class Nodes:
                 message = prompt.invoke({'topic': key, 'information': value,'slides_title':slides_title})
                 slides_content = self.llm2.invoke(message).content
                 slides_json = json.loads(slides_content)
-                slides.append(slides_json)
+                slides+=slides_json
         except Exception as e:
             print(e)
         finally:
@@ -221,7 +214,7 @@ class Nodes:
                 1. Explain and expand on slide content; do not read slides verbatim.
                 2. For coding examples, explain what the code does, its purpose, and how it works.
                 3. Use real-world examples, scenarios, or analogies to explain concepts.
-                4. Provide clear, detailed explanations to ensure students understand the "why" and "how."
+                4. Provide clear explanations to ensure students understand the "why" and "how."
                 5. Make the lecture engaging with rhetorical questions or critical thinking prompts.
 
                 **Topic and Slides:**
@@ -234,7 +227,7 @@ class Nodes:
             '''
             prompt=ChatPromptTemplate.from_template(template)
 
-            message=prompt.invoke({'topic':topic,'slides':slides})
+            message=prompt.invoke({'topic':topic,'slides':item})
 
             lecture_content = self.llm2.invoke(message)
             lecture_content = lecture_content.content.strip()
@@ -242,4 +235,14 @@ class Nodes:
         print("Lecture Agent Complete")
         return state
 
+    def HeyGenNode(self,state: PresentationState) -> PresentationState:
+        lectures = state['lecture']
+        file_paths=[]
+        for item in lectures:
+            file_path=generate_heygen_video(item)
+            file_paths.append(file_path)
+        
+        state["video_paths"]=file_paths
+        print("Video Agent Complete")
+        return state
 
