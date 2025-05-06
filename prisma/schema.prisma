@@ -19,7 +19,6 @@ model Lecture {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   topic       String
   toc         String[]
-  slides      Json[]
   lecture     String[]
   resources   String[]
   vector_db   String
@@ -29,4 +28,14 @@ model Lecture {
   progress    Int      @default(0)
   user        User     @relation(fields: [userId], references: [clerkuserId])
   userId      String
+  slide       Slide[]
+}
+
+model Slide {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  content   String
+  code      String
+  lectureId String  @db.ObjectId
+  lecture   Lecture @relation(fields: [lectureId], references: [id])
 }

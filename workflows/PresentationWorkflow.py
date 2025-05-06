@@ -24,9 +24,9 @@ class PresentationFlow:
         workflow.add_edge("StoreInVectorDB", "ResearchSpecialist")
         workflow.add_edge("ResearchSpecialist", "SlidesMaker")
         workflow.add_edge("SlidesMaker", "LectureAgent")
-        workflow.add_edge("LectureAgent", "VideoMaker")
+        # workflow.add_edge("LectureAgent", "VideoMaker")
         
-        workflow.add_edge("VideoMaker", END)
+        workflow.add_edge("LectureAgent", END)
 
         self.app = workflow.compile()
 

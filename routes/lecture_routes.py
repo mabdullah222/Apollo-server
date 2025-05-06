@@ -7,8 +7,6 @@ from datetime import datetime
 from prisma import Prisma
 
 
-
-
 from workflows.PresentationWorkflow import PresentationFlow
 
 logger = logging.getLogger(__name__)
@@ -29,17 +27,6 @@ def generate_lecture():
     async def process():
         try:
             await db.connect()
-            lecture_in_db=await db.lecture.create(data={
-                "topic": data["topic"],
-                "slides": [],
-                "lecture": [],
-                "vector_db": "",
-                "video_paths": [],
-                "completed": False,
-                "created_at": datetime.now(),
-                "userId": data["clerkUserId"],
-                "progress": 0,
-            })
 
             workflow = create_workflow()
 
@@ -57,18 +44,21 @@ def generate_lecture():
 
             final_state = await asyncio.to_thread(workflow.invoke, initial_state)
 
+            lecture_in_db=await db.lecture.create(data={
+                "topic": data["topic"],
+                "toc": final_state.get("toc", []),
+                "lecture": final_state["lecture"],
+                "vector_db": final_state["vector_db"],
+                "video_paths": final_state.get("video_paths"),
+                "completed": False,
+                "resources": final_state.get("resources"),
+                "created_at": datetime.now(),
+                "userId": data["clerkUserId"],
+                "progress": 0,
+            })
 
-            await db.lecture.update(
-                where={"id": lecture_in_db.id},
-                data={
-                    "slides": final_state["slides"],
-                    "lecture": final_state["lecture"],
-                    "vector_db": final_state["vector_db"],
-                    "videos": final_state.get("video_paths"),
-                    "resources": final_state.get("resources"),
-                    "toc": final_state.get("toc", [])
-                }
-            )
+            for slide in final_state['slides']:
+                await db.slide.create(data={'title':slide['title'],"lectureId":lecture_in_db.id,"content":slide['content'],"code":slide['code']})
 
             return {
                 "lecture_id": lecture_in_db.id,
@@ -86,7 +76,7 @@ def generate_lecture():
 def lecture_status(lecture_id):
     async def process():
         await db.connect()
-        lecture = await db.lecture.find_unique(where={"id": lecture_id})
+        lecture = await db.lecture.find_unique(where={"id": lecture_id},include={"slide":True})
         await db.disconnect()
 
         if not lecture:
@@ -96,7 +86,7 @@ def lecture_status(lecture_id):
             "lecture_id": lecture.id,
             "completed": lecture.completed,
             "video_paths": lecture.video_paths,
-            "slides": lecture.slides,
+            "slides": [{"title":slide.title,"content":slide.content,"code":slide.code} for slide in lecture.slide],
             "lecture": lecture.lecture,
             "progress": lecture.progress,
             "topic": lecture.topic,
@@ -163,6 +153,7 @@ def register_user():
         return {"user_id": user.id, "status": "registered"}
 
     return jsonify(asyncio.run(process()))
+
 
 
 @router.route("/health", methods=["GET"])
