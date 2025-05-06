@@ -1,0 +1,3 @@
+from utils.heygen import generate_heygen_video
+
+file_path=generate_heygen_video(text='''Karenjit Kaur Vohra was born on May 13, 1981, in Sarnia, Ontario, to Sikh Indian Punjabi parents.As a young girl, she was a self-described tomboy, very athletic and played street hockey with the boys.Although the family was Sikh,her parents enrolled her in Catholic school as it was felt to be unsafe for her to go to public school.When she was 13, her family moved to Fort Gratiot, Michigan, then to Lake Forest, California, a year later,fulfilling her grandparents' dream that the family be together in one place.She had her first kiss at 11,[16] lost her virginity at 16 with a basketball player,and discovered her bisexuality at 18.''')

@@ -5,6 +5,7 @@ import uuid
 import logging
 from datetime import datetime
 from prisma import Prisma
+from nodes.QA_Agent import QAAgent
 
 
 from workflows.PresentationWorkflow import PresentationFlow
@@ -15,7 +16,10 @@ router = Blueprint("lecture", __name__)
 VIDEOS_DIR = os.path.join(os.path.dirname(__file__), "..", "lecVids")
 os.makedirs(VIDEOS_DIR, exist_ok=True)
 
+
 db = Prisma()
+qa_agent=QAAgent()
+
 
 def create_workflow():
     return PresentationFlow().app
@@ -95,6 +99,15 @@ def lecture_status(lecture_id):
         }
 
     return jsonify(asyncio.run(process()))
+
+
+@router.route("/qa",methods=["POST"])
+def ask_question():
+    data = request.get_json()
+    answer=qa_agent.create_QA_agent(data['vector_db'],data['content'],data['lecture'],data['question'])
+    return jsonify({"answer":answer})
+
+
 
 @router.route("/lectures", methods=["GET"])
 def get_all_lectures():
