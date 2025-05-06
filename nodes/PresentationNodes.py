@@ -51,7 +51,7 @@ class Nodes:
         Subtopic1\nSubtopic2\nSubtopic3\nSubtopic4\nSubtopic5
         """
         response = self.llm.invoke(prompt)
-        state["toc"] = response.content.strip().split("\n")[:1]
+        state["toc"] = response.content.strip().split("\n")
         return state
 
     def SearchResources(self, state: PresentationState) -> PresentationState:
@@ -205,29 +205,23 @@ class Nodes:
 
 
     def LectureAgent(self, state: PresentationState) -> PresentationState:
-        slides=state['slides']
-        topic=state['topic']
-        for item in slides:
+        slides = state['slides']
+        topic = state['topic']
+        for i in range(len(slides)):
             template = '''
-                Create a teaching script for the topic: {topic} based on the provided slides.
-                **Instructions:**
-                1. Explain and expand on slide content; do not read slides verbatim.
-                2. For coding examples, explain what the code does, its purpose, and how it works.
-                3. Use real-world examples, scenarios, or analogies to explain concepts.
-                4. Provide clear explanations to ensure students understand the "why" and "how."
-                5. Make the lecture engaging with rhetorical questions or critical thinking prompts.
+            Generate a short, clear teaching script based strictly on this slide from a lecture on "{topic}".
 
-                **Topic and Slides:**
-                Topic: {topic}
-                Slides: {slides}
+            Rules:
+            - Only explain what’s on the slide; no greetings or unrelated info.
+            - Keep it brief—just enough for one slide.
+            - Maintain flow as if this follows previous slides.
+            - If code is present, explain its logic and purpose without restating it line-by-line.
 
-                **Output:**
-                - A detailed teaching script divided into sections corresponding to the slides.
-                - Explanations, examples, and real-world applications for each slide.
+            Slide: {slides}
+            slide: {slide_no}
             '''
-            prompt=ChatPromptTemplate.from_template(template)
-
-            message=prompt.invoke({'topic':topic,'slides':item})
+            prompt = ChatPromptTemplate.from_template(template)
+            message = prompt.invoke({'topic': topic, 'slides': slides[i],"slide_no":i})
 
             lecture_content = self.llm2.invoke(message)
             lecture_content = lecture_content.content.strip()

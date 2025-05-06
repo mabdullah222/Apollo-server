@@ -4,7 +4,7 @@ import json
 if __name__ == "__main__":
     app = PresentationFlow().app
     output = app.invoke({
-        "topic": "",
+        "topic": "Teach me Machine Learning",
         "toc": [],
         "resources": [],
         "documents": [],
