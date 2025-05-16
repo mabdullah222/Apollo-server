@@ -29,14 +29,15 @@ class PresentationState(TypedDict):
     slides: List[Dict[str, str]]
     lecture: List[str]
     video_paths: List[str]
+    quiz: List[Dict[str, str]]  # <- Add this
 
 class WebSearchArgs(BaseModel):
     query: str = Field(description="The search query to find relevant information from the web.")
 
 class Nodes:
     def __init__(self):
-        self.llm = ChatGroq(api_key=os.environ['GROQ_API_KEY_1'], model='llama-3.3-70b-versatile')
-        self.llm2 = ChatGroq(api_key=os.environ['GROQ_API_KEY_3'], model='llama-3.3-70b-versatile')
+        self.llm = ChatGroq(api_key=os.environ['GROQ_API_KEY_5'], model='llama-3.3-70b-versatile')
+        self.llm2 = ChatGroq(api_key=os.environ['GROQ_API_KEY_6'], model='llama-3.3-70b-versatile')
 
         self.web_search_tool = WebSearchTool()
         self.embeddings = OllamaEmbeddings(model="nomic-embed-text")
@@ -51,7 +52,7 @@ class Nodes:
         Subtopic1\nSubtopic2\nSubtopic3\nSubtopic4\nSubtopic5
         """
         response = self.llm.invoke(prompt)
-        state["toc"] = response.content.strip().split("\n")[:1]
+        state["toc"] = response.content.strip().split("\n")
         return state
 
     def SearchResources(self, state: PresentationState) -> PresentationState:
@@ -205,35 +206,61 @@ class Nodes:
 
 
     def LectureAgent(self, state: PresentationState) -> PresentationState:
-        slides=state['slides']
-        topic=state['topic']
-        for item in slides:
+        slides = state['slides']
+        topic = state['topic']
+        for i in range(len(slides)):
             template = '''
-                Create a teaching script for the topic: {topic} based on the provided slides.
-                **Instructions:**
-                1. Explain and expand on slide content; do not read slides verbatim.
-                2. For coding examples, explain what the code does, its purpose, and how it works.
-                3. Use real-world examples, scenarios, or analogies to explain concepts.
-                4. Provide clear explanations to ensure students understand the "why" and "how."
-                5. Make the lecture engaging with rhetorical questions or critical thinking prompts.
+            Generate a short, clear teaching script based strictly on this slide from a lecture on "{topic}".
 
-                **Topic and Slides:**
-                Topic: {topic}
-                Slides: {slides}
+            Rules:
+            - Only explain what’s on the slide; no greetings or unrelated info.
+            - Keep it brief—just enough for one slide.
+            - Maintain flow as if this follows previous slides.
+            - If code is present, explain its logic and purpose without restating it line-by-line.
 
-                **Output:**
-                - A detailed teaching script divided into sections corresponding to the slides.
-                - Explanations, examples, and real-world applications for each slide.
+            Slide: {slides}
+            slide: {slide_no}
             '''
-            prompt=ChatPromptTemplate.from_template(template)
-
-            message=prompt.invoke({'topic':topic,'slides':item})
+            prompt = ChatPromptTemplate.from_template(template)
+            message = prompt.invoke({'topic': topic, 'slides': slides[i],"slide_no":i})
 
             lecture_content = self.llm2.invoke(message)
             lecture_content = lecture_content.content.strip()
             state['lecture'].append(lecture_content)
         print("Lecture Agent Complete")
         return state
+    
+    def QuizGenerator(self, state: PresentationState) -> PresentationState:
+        quiz = []
+        for i, lecture_chunk in enumerate(state["lecture"]):
+            prompt = f"""
+            Generate one multiple-choice quiz question based on the following lecture slide script:
+            "{lecture_chunk}"
+
+            Format your response as a JSON with:
+            - question
+            - options: List of 4 options (strings)
+            - answer: Correct option string exactly as in options
+
+            Output:
+            {{
+                "question": "...",
+                "options": ["A", "B", "C", "D"],
+                "answer": "A"
+            }}
+            """
+            try:
+                response = self.llm2.invoke(prompt).content.strip()
+                quiz_item = json.loads(response)
+                quiz.append(quiz_item)
+            except Exception as e:
+                print(f"Quiz generation failed for slide {i}: {e}")
+                continue
+
+        state["quiz"] = quiz
+        print("Quiz Generation Complete")
+        return state
+
 
     def HeyGenNode(self,state: PresentationState) -> PresentationState:
         lectures = state['lecture']
@@ -245,4 +272,3 @@ class Nodes:
         state["video_paths"]=file_paths
         print("Video Agent Complete")
         return state
-

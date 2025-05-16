@@ -10,7 +10,7 @@ load_dotenv()
 
 class QAAgent:
     def __init__(self):
-        self.llm = ChatGroq(api_key=os.environ['GROQ_API_KEY_3'], model='llama-3.3-70b-versatile')
+        self.llm = ChatGroq(api_key=os.environ['GROQ_API_KEY_1'], model='llama-3.3-70b-versatile')
         self.embeddings = OllamaEmbeddings(model="nomic-embed-text")
 
     def create_QA_agent(self,collection_name,slide_content,lecture_content,question):

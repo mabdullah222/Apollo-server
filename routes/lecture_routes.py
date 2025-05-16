@@ -5,17 +5,21 @@ import uuid
 import logging
 from datetime import datetime
 from prisma import Prisma
-
+from nodes.QA_Agent import QAAgent
 
 from workflows.PresentationWorkflow import PresentationFlow
 
 logger = logging.getLogger(__name__)
 router = Blueprint("lecture", __name__)
 
+
+
 VIDEOS_DIR = os.path.join(os.path.dirname(__file__), "..", "lecVids")
 os.makedirs(VIDEOS_DIR, exist_ok=True)
 
 db = Prisma()
+qa_agent=QAAgent()
+
 
 def create_workflow():
     return PresentationFlow().app
@@ -39,12 +43,14 @@ def generate_lecture():
                 "content": {},
                 "slides": [],
                 "lecture": [],
-                "video_paths": []
+                "video_paths": [],
+                "quiz": []  # Add this if quiz is part of the workflow's result
             }
 
             final_state = await asyncio.to_thread(workflow.invoke, initial_state)
 
-            lecture_in_db=await db.lecture.create(data={
+            # Create the lecture in the DB
+            lecture_in_db = await db.lecture.create(data={
                 "topic": data["topic"],
                 "toc": final_state.get("toc", []),
                 "lecture": final_state["lecture"],
@@ -57,8 +63,18 @@ def generate_lecture():
                 "progress": 0,
             })
 
+            # Save the quiz (after lecture creation)
+            for question_data in final_state['quiz']:  # Assuming 'quiz' is part of final_state
+                await db.quiz.create(data={
+                    "lectureId": lecture_in_db.id,
+                    "question": question_data['question'],
+                    "options": question_data['options'],
+                    "answer": question_data['answer'],
+                })
+
+            # Create slides and save them
             for slide in final_state['slides']:
-                await db.slide.create(data={'title':slide['title'],"lectureId":lecture_in_db.id,"content":slide['content'],"code":slide['code']})
+                await db.slide.create(data={'title': slide['title'], "lectureId": lecture_in_db.id, "content": slide['content'], "code": slide['code']})
 
             return {
                 "lecture_id": lecture_in_db.id,
@@ -71,6 +87,7 @@ def generate_lecture():
             await db.disconnect()
 
     return jsonify(asyncio.run(process()))
+
 
 @router.route("/lecture-status/<lecture_id>", methods=["GET"])
 def lecture_status(lecture_id):
@@ -106,8 +123,8 @@ def get_all_lectures():
         return [
             {
                 "lecture_id": lec.id,
+                "topic": lec.topic,
                 "completed": lec.completed,
-                "slides": lec.slides,
                 "lecture": lec.lecture,
                 "progress": lec.progress,
             }
@@ -153,6 +170,33 @@ def register_user():
         return {"user_id": user.id, "status": "registered"}
 
     return jsonify(asyncio.run(process()))
+
+
+@router.route("/qa",methods=["POST"])
+def ask_question():
+    data = request.get_json()
+    answer=qa_agent.create_QA_agent(data['vector_db'],data['content'],data['lecture'],data['question'])
+    return jsonify({"answer":answer})
+
+
+# quiz get route
+@router.route("/quiz/<lecture_id>", methods=["GET"])
+def get_quiz(lecture_id):
+    async def process():
+        await db.connect()
+        lecture = await db.lecture.find_unique(where={"id": lecture_id}, include={"quiz": True})
+        await db.disconnect()
+
+        if not lecture:
+            return {"error": "Lecture not found"}, 404  # ❌ remove jsonify here
+
+        return {
+            "lecture_id": lecture.id,
+            "quiz": [{"question": q.question, "options": q.options, "answer": q.answer} for q in lecture.quiz]
+        }  # ❌ remove jsonify here
+
+    return jsonify(asyncio.run(process()))  # ✅ wrap only once here
+
 
 
 

@@ -29,6 +29,7 @@ model Lecture {
   user        User     @relation(fields: [userId], references: [clerkuserId])
   userId      String
   slide       Slide[]
+  quiz        Quiz[]   // <-- New relation to quizzes
 }
 
 model Slide {
@@ -38,4 +39,13 @@ model Slide {
   code      String
   lectureId String  @db.ObjectId
   lecture   Lecture @relation(fields: [lectureId], references: [id])
+}
+
+model Quiz {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  lectureId String   @db.ObjectId
+  lecture   Lecture  @relation(fields: [lectureId], references: [id])
+  question  String
+  options   String[] // Multiple choice options
+  answer    String   // The correct answer
 }
